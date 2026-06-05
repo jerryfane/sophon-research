@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+dist/
+build/
+*.egg-info/
+
+# Local research outputs and downloaded papers.
+downloads/
+papers/
+outputs/
+*.pdf
