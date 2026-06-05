@@ -18,9 +18,15 @@ from sophon_research.sophon import (
 class FakeResponse:
     def __init__(self, payload: bytes):
         self.payload = payload
+        self.position = 0
 
-    def read(self) -> bytes:
-        return self.payload
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            size = len(self.payload) - self.position
+        start = self.position
+        end = min(len(self.payload), start + size)
+        self.position = end
+        return self.payload[start:end]
 
     def __enter__(self) -> "FakeResponse":
         return self
@@ -99,6 +105,25 @@ class SophonClientTests(unittest.TestCase):
             transport.urls,
             ["https://example.test/api/v1/papers/paper-slug/text"],
         )
+
+    def test_paper_pdf_reads_bytes(self) -> None:
+        transport = FakeTransport(b"%PDF-1.7")
+        client = SophonClient(base_url="https://example.test", urlopen=transport)
+
+        data = client.paper_pdf("paper-slug")
+
+        self.assertEqual(data, b"%PDF-1.7")
+        self.assertEqual(
+            transport.urls,
+            ["https://example.test/api/v1/papers/paper-slug/pdf"],
+        )
+
+    def test_paper_download_stops_at_size_limit(self) -> None:
+        transport = FakeTransport(b"abcdef")
+        client = SophonClient(base_url="https://example.test", urlopen=transport)
+
+        with self.assertRaisesRegex(SophonRemoteError, "exceeded 4 bytes"):
+            client.paper_pdf("paper-slug", max_bytes=4)
 
     def test_llms_full_uses_full_endpoint(self) -> None:
         transport = FakeTransport(b"# Sophon")

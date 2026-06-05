@@ -16,6 +16,7 @@ from .formatting import (
     json_text,
     limit_search_results,
 )
+from .files import WriteReceipt, resolve_output_path, write_private_file
 from .sophon import (
     SophonClient,
     SophonDecodeError,
@@ -23,6 +24,11 @@ from .sophon import (
     SophonUsageError,
 )
 
+
+DEFAULT_DOWNLOAD_LIMIT_BYTES = 25 * 1024 * 1024
+LICENSE_NOTE = (
+    "Sophon returns paper text/PDF only when licensing permits redistribution."
+)
 
 SEARCH_RESULT_KEYS = {
     "eval": "eval",
@@ -67,6 +73,9 @@ def run(
     except (SophonRemoteError, SophonDecodeError) as exc:
         print(f"sophon-research: {exc}", file=stderr)
         return 1
+    except OSError as exc:
+        print(f"sophon-research: local file error: {exc}", file=stderr)
+        return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -109,6 +118,14 @@ def build_parser() -> argparse.ArgumentParser:
     paper = subcommands.add_parser("paper", help="fetch Sophon paper text")
     paper.add_argument("slug", help="Sophon paper slug")
     paper.add_argument("--text", action="store_true", help="fetch paper text")
+    paper.add_argument("--pdf", action="store_true", help="fetch paper PDF")
+    paper.add_argument("--output", help="output file or existing directory")
+    paper.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_DOWNLOAD_LIMIT_BYTES,
+        help="maximum response size for text or PDF downloads",
+    )
     paper.add_argument("--json", action="store_true", dest="json_output")
     paper.set_defaults(func=cmd_paper)
 
@@ -195,18 +212,56 @@ def cmd_paper(
     stdout: TextIO,
     client_factory: ClientFactory,
 ) -> int:
-    if not args.text:
-        raise SophonUsageError("paper requires --text until download support is added")
-    text = client_factory().paper_text(args.slug)
-    if args.json_output:
+    if args.text and args.pdf:
+        raise SophonUsageError("paper accepts only one of --text or --pdf")
+    if not args.text and not args.pdf:
+        raise SophonUsageError(f"paper requires --text or --pdf. {LICENSE_NOTE}")
+    if args.pdf and not args.output:
+        raise SophonUsageError("paper --pdf requires --output")
+
+    client = client_factory()
+    if args.pdf:
+        output_path = resolve_output_path(args.output, args.slug, ".pdf")
+        data = client.paper_pdf(args.slug, max_bytes=args.max_bytes)
+        receipt = write_private_file(
+            output_path,
+            data,
+        )
+        _print_receipt(
+            receipt,
+            slug=args.slug,
+            kind="pdf",
+            json_output=args.json_output,
+            stdout=stdout,
+        )
+        return 0
+
+    output_path = None
+    if args.output:
+        output_path = resolve_output_path(args.output, args.slug, ".txt")
+
+    text = client.paper_text(args.slug, max_bytes=args.max_bytes)
+    if args.output:
+        receipt = write_private_file(
+            output_path,
+            text.encode("utf-8"),
+        )
+        _print_receipt(
+            receipt,
+            slug=args.slug,
+            kind="text",
+            json_output=args.json_output,
+            stdout=stdout,
+        )
+    elif args.json_output:
         print(
-            json_text({"slug": args.slug, **bounded_text(text)}),
+            json_text({"slug": args.slug, "note": LICENSE_NOTE, **bounded_text(text)}),
             end="",
             file=stdout,
         )
     else:
         print(
-            format_text_preview(f"Paper text: {args.slug}", text),
+            format_text_preview(f"Paper text: {args.slug}", text) + LICENSE_NOTE + "\n",
             end="",
             file=stdout,
         )
@@ -236,6 +291,38 @@ def cmd_version(
 ) -> int:
     print(f"sophon-research {__version__}", file=stdout)
     return 0
+
+
+def _print_receipt(
+    receipt: WriteReceipt,
+    *,
+    slug: str,
+    kind: str,
+    json_output: bool,
+    stdout: TextIO,
+) -> None:
+    record = {
+        "slug": slug,
+        "kind": kind,
+        "path": str(receipt.path),
+        "bytes": receipt.bytes,
+        "sha256": receipt.sha256,
+        "note": LICENSE_NOTE,
+    }
+    if json_output:
+        print(json_text(record), end="", file=stdout)
+    else:
+        print(
+            "\n".join(
+                [
+                    f"Wrote {kind}: {receipt.path}",
+                    f"Bytes: {receipt.bytes}",
+                    f"SHA-256: {receipt.sha256}",
+                    LICENSE_NOTE,
+                ]
+            ),
+            file=stdout,
+        )
 
 
 if __name__ == "__main__":

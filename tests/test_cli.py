@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from sophon_research import __version__
@@ -49,8 +51,11 @@ class FakeClient:
             "canonicalUrl": "https://www.swebench.com",
         }
 
-    def paper_text(self, slug: str) -> str:
+    def paper_text(self, slug: str, max_bytes: int | None = None) -> str:
         return f"text for {slug}"
+
+    def paper_pdf(self, slug: str, max_bytes: int | None = None) -> bytes:
+        return f"pdf for {slug}".encode()
 
     def llms(self, full: bool = False) -> str:
         return "# full" if full else "# index"
@@ -142,7 +147,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("SWE-bench", stdout.getvalue())
         self.assertIn("Slug: swe-bench", stdout.getvalue())
 
-    def test_paper_requires_text_flag(self) -> None:
+    def test_paper_requires_text_or_pdf_flag(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
 
@@ -154,7 +159,7 @@ class CliTests(unittest.TestCase):
         )
 
         self.assertEqual(code, 2)
-        self.assertIn("requires --text", stderr.getvalue())
+        self.assertIn("requires --text or --pdf", stderr.getvalue())
 
     def test_paper_text_json_is_bounded_record(self) -> None:
         stdout = io.StringIO()
@@ -171,6 +176,89 @@ class CliTests(unittest.TestCase):
         data = json.loads(stdout.getvalue())
         self.assertEqual(data["slug"], "paper-1")
         self.assertEqual(data["text"], "text for paper-1")
+        self.assertIn("licensing permits", data["note"])
+
+    def test_paper_text_output_writes_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "paper.txt"
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            code = run(
+                ["paper", "paper-1", "--text", "--output", str(output)],
+                stdout=stdout,
+                stderr=stderr,
+                client_factory=fake_client_factory,
+            )
+
+            self.assertEqual(code, 0)
+            self.assertEqual(output.read_text(), "text for paper-1")
+            self.assertIn("Wrote text:", stdout.getvalue())
+            self.assertIn("SHA-256:", stdout.getvalue())
+            self.assertEqual(stderr.getvalue(), "")
+
+    def test_paper_pdf_requires_output(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        code = run(
+            ["paper", "paper-1", "--pdf"],
+            stdout=stdout,
+            stderr=stderr,
+            client_factory=fake_client_factory,
+        )
+
+        self.assertEqual(code, 2)
+        self.assertIn("--pdf requires --output", stderr.getvalue())
+
+    def test_paper_pdf_output_directory_writes_slug_pdf(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            code = run(
+                ["paper", "paper-1", "--pdf", "--output", directory, "--json"],
+                stdout=stdout,
+                stderr=stderr,
+                client_factory=fake_client_factory,
+            )
+
+            output = Path(directory) / "paper-1.pdf"
+            data = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(output.read_bytes(), b"pdf for paper-1")
+            self.assertEqual(data["path"], str(output))
+            self.assertEqual(data["kind"], "pdf")
+            self.assertEqual(data["bytes"], len(b"pdf for paper-1"))
+
+    def test_paper_output_refuses_overwrite(self) -> None:
+        calls = []
+
+        def tracking_client_factory() -> FakeClient:
+            class TrackingClient(FakeClient):
+                def paper_text(self, slug: str, max_bytes: int | None = None) -> str:
+                    calls.append(slug)
+                    return super().paper_text(slug, max_bytes=max_bytes)
+
+            return TrackingClient()
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "paper.txt"
+            output.write_text("existing")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            code = run(
+                ["paper", "paper-1", "--text", "--output", str(output)],
+                stdout=stdout,
+                stderr=stderr,
+                client_factory=tracking_client_factory,
+            )
+
+            self.assertEqual(code, 2)
+            self.assertEqual(calls, [])
+            self.assertEqual(output.read_text(), "existing")
+            self.assertIn("refusing to overwrite", stderr.getvalue())
 
     def test_llms_full_prints_preview(self) -> None:
         stdout = io.StringIO()
