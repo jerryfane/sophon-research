@@ -37,3 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command")
     subcommands.add_parser("version", help="show Sophon Research version")
     return parser
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
