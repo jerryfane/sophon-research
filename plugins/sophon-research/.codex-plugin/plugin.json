@@ -1,0 +1,37 @@
+{
+  "name": "sophon-research",
+  "version": "0.1.0",
+  "description": "Codex plugin and local CLI for AI research using Sophon's public eval, model, tool, leaderboard, and paper catalog.",
+  "author": {
+    "name": "Jerry Fane",
+    "url": "https://github.com/jerryfane"
+  },
+  "repository": "https://github.com/jerryfane/sophon-research",
+  "license": "MIT",
+  "keywords": [
+    "ai-research",
+    "codex",
+    "codex-plugin",
+    "evals",
+    "papers",
+    "sophon"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Sophon Research",
+    "shortDescription": "Research AI evals, models, tools, leaderboards, and papers from Sophon.",
+    "longDescription": "Sophon Research is a local Codex plugin and CLI for querying Sophon's public read-only AI research catalog without scraping or API keys.",
+    "developerName": "Jerry Fane",
+    "category": "Research",
+    "websiteURL": "https://github.com/jerryfane/sophon-research",
+    "brandColor": "#246BFE",
+    "composerIcon": "assets/sophon-research-logo.svg",
+    "logo": "assets/sophon-research-logo.svg",
+    "capabilities": [
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Use Sophon Research to find AI eval, model, tool, leaderboard, or paper context."
+    ]
+  }
+}

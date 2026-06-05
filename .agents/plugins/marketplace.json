@@ -1,0 +1,20 @@
+{
+  "name": "sophon-research",
+  "interface": {
+    "displayName": "Sophon Research"
+  },
+  "plugins": [
+    {
+      "name": "sophon-research",
+      "source": {
+        "source": "local",
+        "path": "./plugins/sophon-research"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Research"
+    }
+  ]
+}
