@@ -11,6 +11,7 @@ from urllib import error, parse, request
 
 DEFAULT_BASE_URL = "https://sophon.at"
 DEFAULT_TIMEOUT_SECONDS = 15.0
+READ_CHUNK_BYTES = 64 * 1024
 
 ENTITY_TYPES = {
     "eval": "evals",
@@ -49,7 +50,7 @@ class SophonDecodeError(SophonError):
 
 
 class ResponseLike(Protocol):
-    def read(self) -> bytes:
+    def read(self, size: int = -1) -> bytes:
         """Read response bytes."""
 
     def __enter__(self) -> "ResponseLike":
@@ -74,7 +75,9 @@ class SophonClient:
         base_url = self.base_url or os.environ.get("SOPHON_BASE") or DEFAULT_BASE_URL
         normalized = base_url.rstrip("/")
         if not normalized.startswith(("http://", "https://")):
-            raise SophonUsageError("Sophon base URL must start with http:// or https://")
+            raise SophonUsageError(
+                "Sophon base URL must start with http:// or https://"
+            )
         object.__setattr__(self, "base_url", normalized)
         if self.timeout_seconds <= 0:
             raise SophonUsageError("timeout_seconds must be positive")
@@ -94,10 +97,21 @@ class SophonClient:
         slug = _require_non_empty(slug, "slug")
         return self._get_json(f"/api/v1/{canonical_type}/{_quote_segment(slug)}")
 
-    def paper_text(self, slug: str) -> str:
+    def paper_text(self, slug: str, max_bytes: int | None = None) -> str:
         """Fetch paper text when Sophon exposes it."""
         slug = _require_non_empty(slug, "slug")
-        return self._get_text(f"/api/v1/papers/{_quote_segment(slug)}/text")
+        return self._get_text(
+            f"/api/v1/papers/{_quote_segment(slug)}/text",
+            max_bytes=max_bytes,
+        )
+
+    def paper_pdf(self, slug: str, max_bytes: int | None = None) -> bytes:
+        """Fetch paper PDF bytes when Sophon exposes them."""
+        slug = _require_non_empty(slug, "slug")
+        return self._get_bytes(
+            f"/api/v1/papers/{_quote_segment(slug)}/pdf",
+            max_bytes=max_bytes,
+        )
 
     def llms(self, full: bool = False) -> str:
         """Fetch Sophon's agent-oriented LLM context text."""
@@ -121,7 +135,21 @@ class SophonClient:
         self,
         path: str,
         query: dict[str, str] | None = None,
+        max_bytes: int | None = None,
     ) -> str:
+        raw = self._get_bytes(path, query=query, max_bytes=max_bytes)
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise SophonDecodeError("Sophon returned non-UTF-8 text") from exc
+
+    def _get_bytes(
+        self,
+        path: str,
+        query: dict[str, str] | None = None,
+        max_bytes: int | None = None,
+    ) -> bytes:
+        max_bytes = _normalize_max_bytes(max_bytes)
         url = self._url(path, query=query)
         req = request.Request(
             url,
@@ -130,19 +158,28 @@ class SophonClient:
         )
         try:
             with self.urlopen(req, timeout=self.timeout_seconds) as response:
-                raw = response.read()
+                chunks: list[bytes] = []
+                total = 0
+                while True:
+                    chunk = response.read(READ_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if max_bytes is not None and total > max_bytes:
+                        raise SophonRemoteError(
+                            f"Sophon response exceeded {max_bytes} bytes"
+                        )
+                    chunks.append(chunk)
         except error.HTTPError as exc:
             detail = _http_error_detail(exc)
-            raise SophonRemoteError(f"Sophon returned HTTP {exc.code}: {detail}") from exc
+            raise SophonRemoteError(
+                f"Sophon returned HTTP {exc.code}: {detail}"
+            ) from exc
         except error.URLError as exc:
             raise SophonRemoteError(f"Sophon request failed: {exc.reason}") from exc
         except OSError as exc:
             raise SophonRemoteError(f"Sophon request failed: {exc}") from exc
-
-        try:
-            return raw.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise SophonDecodeError("Sophon returned non-UTF-8 text") from exc
+        return b"".join(chunks)
 
     def _url(self, path: str, query: dict[str, str] | None = None) -> str:
         clean_path = path if path.startswith("/") else f"/{path}"
@@ -173,6 +210,14 @@ def _require_non_empty(value: str, field_name: str) -> str:
     if not normalized:
         raise SophonUsageError(f"{field_name} must be non-empty")
     return normalized
+
+
+def _normalize_max_bytes(max_bytes: int | None) -> int | None:
+    if max_bytes is None:
+        return None
+    if max_bytes <= 0:
+        raise SophonUsageError("max_bytes must be positive")
+    return max_bytes
 
 
 def _http_error_detail(exc: error.HTTPError) -> str:
