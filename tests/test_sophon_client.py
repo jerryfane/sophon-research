@@ -12,6 +12,8 @@ from sophon_research.sophon import (
     SophonRemoteError,
     SophonUsageError,
     canonical_entity_type,
+    canonical_search_sort,
+    canonical_search_type,
 )
 
 
@@ -76,6 +78,30 @@ class SophonClientTests(unittest.TestCase):
             transport.urls,
             ["https://example.test/api/v1/search?q=swe+bench"],
         )
+
+    def test_search_url_encodes_optional_params(self) -> None:
+        transport = FakeTransport(b'{"query":"swe bench","results":{}}')
+        client = SophonClient(base_url="https://example.test", urlopen=transport)
+
+        client.search("swe bench", result_type="evals", per=2, sort="-recent")
+
+        self.assertEqual(
+            transport.urls,
+            ["https://example.test/api/v1/search?q=swe+bench&type=eval&per=2&sort=-recent"],
+        )
+
+    def test_invalid_search_params_fail_before_network(self) -> None:
+        transport = FakeTransport()
+        client = SophonClient(base_url="https://example.test", urlopen=transport)
+
+        with self.assertRaises(SophonUsageError):
+            client.search("swe bench", result_type="widgets")
+        with self.assertRaises(SophonUsageError):
+            client.search("swe bench", per=31)
+        with self.assertRaises(SophonUsageError):
+            client.search("swe bench", sort="hot")
+
+        self.assertEqual(transport.urls, [])
 
     def test_entity_type_validation_happens_before_network(self) -> None:
         transport = FakeTransport()
@@ -157,6 +183,11 @@ class SophonClientTests(unittest.TestCase):
     def test_canonical_entity_aliases(self) -> None:
         self.assertEqual(canonical_entity_type("paper"), "papers")
         self.assertEqual(canonical_entity_type("people"), "people")
+
+    def test_canonical_search_aliases(self) -> None:
+        self.assertEqual(canonical_search_type("evals"), "eval")
+        self.assertEqual(canonical_search_type("people"), "person")
+        self.assertEqual(canonical_search_sort("-recent"), "-recent")
 
 
 if __name__ == "__main__":

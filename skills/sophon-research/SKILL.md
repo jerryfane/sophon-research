@@ -36,6 +36,7 @@ Search and fetch structured entities:
 ```sh
 sophon-research search "swe-bench" --limit 5
 sophon-research search "swe-bench" --type evals --json
+sophon-research search "swe-bench" --type eval --per 5 --sort recent --json
 sophon-research get evals swe-bench --json
 ```
 
@@ -73,7 +74,8 @@ paper text unless `--output` is used.
 ## Workflow
 
 1. Start broad with `search`, then narrow by type when the user asks about a
-   specific class of entity.
+   specific class of entity. Use `--sort recent` when recency is more important
+   than relevance.
 2. Fetch the best candidate entities with `get <type> <slug> --json`.
 3. Follow relationships in the entity JSON: scores, capabilities, publishers,
    papers, tools, organizations, and related models.

@@ -20,9 +20,21 @@ class FakeClient:
             "llms": {"index": "https://sophon.at/llms.txt"},
         }
 
-    def search(self, query: str) -> dict[str, object]:
+    def search(
+        self,
+        query: str,
+        *,
+        result_type: str | None = None,
+        per: int | None = None,
+        sort: str | None = None,
+    ) -> dict[str, object]:
         return {
             "query": query,
+            "received": {
+                "result_type": result_type,
+                "per": per,
+                "sort": sort,
+            },
             "results": {
                 "eval": [
                     {
@@ -131,6 +143,37 @@ class CliTests(unittest.TestCase):
         data = json.loads(stdout.getvalue())
         self.assertEqual(sorted(data["results"]), ["eval"])
         self.assertEqual(data["results"]["eval"][0]["slug"], "swe-bench")
+        self.assertEqual(data["received"]["result_type"], "eval")
+        self.assertEqual(data["received"]["per"], 1)
+
+    def test_search_passes_sort_and_per_alias_to_client(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        code = run(
+            [
+                "search",
+                "swe-bench",
+                "--type",
+                "eval",
+                "--per",
+                "2",
+                "--sort",
+                "recent",
+                "--json",
+            ],
+            stdout=stdout,
+            stderr=stderr,
+            client_factory=fake_client_factory,
+        )
+
+        self.assertEqual(code, 0)
+        data = json.loads(stdout.getvalue())
+        self.assertEqual(data["received"], {
+            "result_type": "eval",
+            "per": 2,
+            "sort": "recent",
+        })
 
     def test_get_prints_entity_summary(self) -> None:
         stdout = io.StringIO()

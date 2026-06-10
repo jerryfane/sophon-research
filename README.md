@@ -71,6 +71,7 @@ Search and fetch an eval:
 ```sh
 bin/sophon-research search "swe-bench" --limit 3
 bin/sophon-research search "swe-bench" --type evals --json
+bin/sophon-research search "swe-bench" --type eval --per 3 --sort recent --json
 bin/sophon-research get evals swe-bench --json
 ```
 

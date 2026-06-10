@@ -105,7 +105,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=sorted(SEARCH_RESULT_KEYS),
         dest="result_type",
     )
-    search.add_argument("--limit", type=int, default=10, help="results per group")
+    search.add_argument(
+        "--limit",
+        "--per",
+        type=int,
+        default=10,
+        dest="limit",
+        help="results per group (1..30)",
+    )
+    search.add_argument(
+        "--sort",
+        choices=("relevance", "title", "recent", "-relevance", "-title", "-recent"),
+        help="order within each result group; prefix - to reverse",
+    )
     search.add_argument("--json", action="store_true", dest="json_output")
     search.set_defaults(func=cmd_search)
 
@@ -178,9 +190,15 @@ def cmd_search(
     stdout: TextIO,
     client_factory: ClientFactory,
 ) -> int:
-    data = client_factory().search(args.query)
+    result_type = SEARCH_RESULT_KEYS[args.result_type] if args.result_type else None
+    data = client_factory().search(
+        args.query,
+        result_type=result_type,
+        per=args.limit,
+        sort=args.sort,
+    )
     if args.result_type:
-        group = SEARCH_RESULT_KEYS[args.result_type]
+        group = result_type
         results = data.get("results")
         values = results.get(group, []) if isinstance(results, dict) else []
         data = {**data, "results": {group: values}}

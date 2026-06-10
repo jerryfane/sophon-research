@@ -32,6 +32,27 @@ ENTITY_TYPES = {
     "papers": "papers",
 }
 
+SEARCH_TYPES = {
+    "eval": "eval",
+    "evals": "eval",
+    "model": "model",
+    "models": "model",
+    "tool": "tool",
+    "tools": "tool",
+    "leaderboard": "leaderboard",
+    "leaderboards": "leaderboard",
+    "organization": "organization",
+    "organizations": "organization",
+    "person": "person",
+    "people": "person",
+    "capability": "capability",
+    "capabilities": "capability",
+    "paper": "paper",
+    "papers": "paper",
+}
+
+SEARCH_SORTS = {"relevance", "title", "recent"}
+
 
 class SophonError(RuntimeError):
     """Base class for Sophon client errors."""
@@ -86,10 +107,24 @@ class SophonClient:
         """Return Sophon's API index JSON."""
         return self._get_json("/api/v1")
 
-    def search(self, query: str) -> dict[str, Any]:
+    def search(
+        self,
+        query: str,
+        *,
+        result_type: str | None = None,
+        per: int | None = None,
+        sort: str | None = None,
+    ) -> dict[str, Any]:
         """Search Sophon's catalog."""
         query = _require_non_empty(query, "query")
-        return self._get_json("/api/v1/search", query={"q": query})
+        params = {"q": query}
+        if result_type:
+            params["type"] = canonical_search_type(result_type)
+        if per is not None:
+            params["per"] = str(_normalize_search_per(per))
+        if sort:
+            params["sort"] = canonical_search_sort(sort)
+        return self._get_json("/api/v1/search", query=params)
 
     def get_entity(self, entity_type: str, slug: str) -> dict[str, Any]:
         """Fetch an entity by type and slug."""
@@ -201,6 +236,30 @@ def canonical_entity_type(entity_type: str) -> str:
     return canonical
 
 
+def canonical_search_type(result_type: str) -> str:
+    """Return the singular Sophon search result type accepted by search."""
+    normalized = _require_non_empty(result_type, "result_type").lower()
+    canonical = SEARCH_TYPES.get(normalized)
+    if canonical is None:
+        allowed = ", ".join(sorted(set(SEARCH_TYPES.values())))
+        raise SophonUsageError(
+            f"unsupported search result type {result_type!r}; expected one of: {allowed}"
+        )
+    return canonical
+
+
+def canonical_search_sort(sort: str) -> str:
+    """Return a validated Sophon search sort value."""
+    normalized = _require_non_empty(sort, "sort").lower()
+    base = normalized[1:] if normalized.startswith("-") else normalized
+    if base not in SEARCH_SORTS:
+        allowed = ", ".join(sorted(SEARCH_SORTS))
+        raise SophonUsageError(
+            f"unsupported search sort {sort!r}; expected one of: {allowed}, or prefix -"
+        )
+    return normalized
+
+
 def _quote_segment(value: str) -> str:
     return parse.quote(value.strip(), safe="")
 
@@ -218,6 +277,12 @@ def _normalize_max_bytes(max_bytes: int | None) -> int | None:
     if max_bytes <= 0:
         raise SophonUsageError("max_bytes must be positive")
     return max_bytes
+
+
+def _normalize_search_per(per: int) -> int:
+    if per < 1 or per > 30:
+        raise SophonUsageError("search results per group must be between 1 and 30")
+    return per
 
 
 def _http_error_detail(exc: error.HTTPError) -> str:

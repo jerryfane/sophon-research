@@ -10,16 +10,22 @@ Use this file when producing a cited research answer, comparison, or entity map.
    sophon-research search "<topic>" --limit 5 --json
    ```
 
-2. Choose candidate slugs by relevance, entity type, and source quality.
-3. Fetch details:
+2. For new or trending work, repeat the search with recency sorting:
+
+   ```sh
+   sophon-research search "<topic>" --per 5 --sort recent --json
+   ```
+
+3. Choose candidate slugs by relevance, entity type, recency, and source quality.
+4. Fetch details:
 
    ```sh
    sophon-research get <type> <slug> --json
    ```
 
-4. Follow relationships in the JSON: scores, capabilities, publishers,
+5. Follow relationships in the JSON: scores, capabilities, publishers,
    organizations, papers, tools, models, and canonical URLs.
-5. Verify important technical claims against primary papers, benchmark repos, or
+6. Verify important technical claims against primary papers, benchmark repos, or
    official model/tool docs before presenting them as facts.
 
 ## Eval Or Benchmark Discovery

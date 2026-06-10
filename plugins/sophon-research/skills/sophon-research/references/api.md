@@ -11,6 +11,8 @@ Sophon exposes read-only, unauthenticated catalog access:
 - `GET /api/v1` - endpoint index.
 - `GET /api/v1/search?q={query}` - full-text search across evals, tools,
   models, papers, leaderboards, organizations, people, and capabilities.
+  Optional params are `type`, `per`, and `sort`. `sort` accepts `relevance`,
+  `title`, or `recent`; prefix it with `-` to reverse order.
 - `GET /api/v1/{type}/{slug}` - one entity with metadata, scores, and
   relationships. Supported types are `evals`, `models`, `tools`,
   `leaderboards`, `organizations`, `people`, `capabilities`, and `papers`.
@@ -25,7 +27,7 @@ Sophon exposes read-only, unauthenticated catalog access:
 ```sh
 sophon-research doctor
 sophon-research api [--json]
-sophon-research search <query> [--type T] [--limit N] [--json]
+sophon-research search <query> [--type T] [--limit N|--per N] [--sort S] [--json]
 sophon-research get <type> <slug> [--json]
 sophon-research paper <slug> --text [--output PATH_OR_DIR] [--max-bytes N] [--json]
 sophon-research paper <slug> --pdf --output PATH_OR_DIR [--max-bytes N] [--json]
@@ -35,6 +37,11 @@ sophon-research version
 
 Use plural or singular entity types where supported: `evals`, `models`,
 `tools`, `leaderboards`, `organizations`, `people`, `capabilities`, `papers`.
+For search, the CLI accepts singular and plural forms, then sends Sophon's
+singular result group type to the API.
+`--limit` and `--per` are aliases for results per group and must be `1..30`.
+`--sort` accepts `relevance`, `title`, `recent`, or the same values prefixed
+with `-`.
 
 ## Output Rules
 
