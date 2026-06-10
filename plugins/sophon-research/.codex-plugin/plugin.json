@@ -1,6 +1,6 @@
 {
   "name": "sophon-research",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Codex plugin and local CLI for AI research using Sophon's public eval, model, tool, leaderboard, and paper catalog.",
   "author": {
     "name": "Jerry Fane",

@@ -188,7 +188,7 @@ class SophonClient:
         url = self._url(path, query=query)
         req = request.Request(
             url,
-            headers={"User-Agent": "sophon-research/0.1.0"},
+            headers={"User-Agent": "sophon-research/0.1.1"},
             method="GET",
         )
         try:

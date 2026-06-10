@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sophon-research"
-version = "0.1.0"
+version = "0.1.1"
 description = "Codex plugin and local CLI for AI research using Sophon's public catalog."
 readme = "README.md"
 requires-python = ">=3.12"
